@@ -180,24 +180,21 @@ db.serialize(() => {
     VALUES (?, ?)
   `);
 
-  stationLines.forEach((sl) => insertStationLine.run(sl));
+  stationLines.forEach((stationLine) => insertStationLine.run(stationLine));
   insertStationLine.finalize();
 
   const segments = [
     [1, 2, 1],
     [2, 3, 1],
     [3, 4, 1],
-
     [1, 5, 2],
     [5, 6, 2],
     [6, 7, 2],
-
     [2, 5, 3],
     [5, 8, 3],
     [8, 9, 3],
     [6, 10, 3],
     [10, 11, 3],
-
     [4, 8, 4],
     [8, 7, 4],
     [7, 12, 4]
