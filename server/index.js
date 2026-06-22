@@ -1,10 +1,13 @@
-const dao = require('./dao');
-
 'use strict';
 
 const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
+const session = require('express-session');
+const SQLiteStore = require('connect-sqlite3')(session);
+
+const dao = require('./dao');
+const { passport, isLoggedIn } = require('./auth');
 
 const PORT = 3001;
 const CLIENT_URL = 'http://localhost:5173';
@@ -19,11 +22,68 @@ app.use(cors({
   credentials: true,
 }));
 
+app.use(session({
+  store: new SQLiteStore({
+    db: 'sessions.db',
+    dir: './'
+  }),
+  secret: 'last race development secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax'
+  }
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Server is running' });
 });
 
-app.get('/api/network/full', async (req, res) => {
+/**
+ * Login
+ * Body:
+ * {
+ *   "username": "nasrin@example.com",
+ *   "password": "password"
+ * }
+ */
+app.post('/api/sessions', passport.authenticate('local'), (req, res) => {
+  res.json(req.user);
+});
+
+/**
+ * Check current logged-in user.
+ */
+app.get('/api/sessions/current', (req, res) => {
+  if (req.isAuthenticated()) {
+    res.json(req.user);
+  } else {
+    res.status(401).json({ error: 'Not authenticated' });
+  }
+});
+
+/**
+ * Logout
+ */
+app.delete('/api/sessions/current', (req, res) => {
+  req.logout((err) => {
+    if (err) {
+      return res.status(503).json({ error: 'Logout failed' });
+    }
+
+    res.status(204).end();
+  });
+});
+
+/**
+ * Full network for setup phase.
+ * Protected: anonymous users cannot see the network.
+ */
+app.get('/api/network/full', isLoggedIn, async (req, res) => {
   try {
     const network = await dao.getFullNetwork();
     res.json(network);
@@ -33,7 +93,11 @@ app.get('/api/network/full', async (req, res) => {
   }
 });
 
-app.get('/api/network/planning', async (req, res) => {
+/**
+ * Planning network.
+ * Protected: anonymous users cannot play.
+ */
+app.get('/api/network/planning', isLoggedIn, async (req, res) => {
   try {
     const network = await dao.getPlanningNetwork();
     res.json(network);
@@ -43,7 +107,11 @@ app.get('/api/network/planning', async (req, res) => {
   }
 });
 
-app.get('/api/ranking', async (req, res) => {
+/**
+ * Ranking page.
+ * Protected because only registered users have access to registered-user features.
+ */
+app.get('/api/ranking', isLoggedIn, async (req, res) => {
   try {
     const ranking = await dao.getRanking();
     res.json(ranking);
@@ -52,6 +120,7 @@ app.get('/api/ranking', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
