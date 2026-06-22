@@ -1,3 +1,5 @@
+const dao = require('./dao');
+
 'use strict';
 
 const express = require('express');
@@ -21,6 +23,35 @@ app.get('/api/test', (req, res) => {
   res.json({ message: 'Server is running' });
 });
 
+app.get('/api/network/full', async (req, res) => {
+  try {
+    const network = await dao.getFullNetwork();
+    res.json(network);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/network/planning', async (req, res) => {
+  try {
+    const network = await dao.getPlanningNetwork();
+    res.json(network);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/ranking', async (req, res) => {
+  try {
+    const ranking = await dao.getRanking();
+    res.json(ranking);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
