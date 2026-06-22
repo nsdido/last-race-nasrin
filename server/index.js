@@ -121,6 +121,43 @@ app.get('/api/ranking', isLoggedIn, async (req, res) => {
   }
 });
 
+/**
+ * Create a new game for the logged-in user.
+ */
+app.post('/api/games', isLoggedIn, async (req, res) => {
+  try {
+    const game = await dao.createGame(req.user.id);
+    res.status(201).json(game);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not create game' });
+  }
+});
+
+/**
+ * Get one game owned by the logged-in user.
+ */
+app.get('/api/games/:gameId', isLoggedIn, async (req, res) => {
+  try {
+    const gameId = Number(req.params.gameId);
+
+    if (!Number.isInteger(gameId) || gameId <= 0) {
+      return res.status(400).json({ error: 'Invalid game id' });
+    }
+
+    const game = await dao.getGameById(gameId, req.user.id);
+
+    if (!game) {
+      return res.status(404).json({ error: 'Game not found' });
+    }
+
+    res.json(game);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not retrieve game' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

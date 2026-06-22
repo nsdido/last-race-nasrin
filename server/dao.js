@@ -137,6 +137,155 @@ async function getUserById(id) {
   `, [id]);
 }
 
+async function getAllStations() {
+  return await dbAll(`
+    SELECT id, name
+    FROM stations
+    ORDER BY id
+  `);
+}
+
+async function getAllSegmentsRaw() {
+  return await dbAll(`
+    SELECT id, station1_id AS station1Id, station2_id AS station2Id
+    FROM segments
+    ORDER BY id
+  `);
+}
+
+function buildAdjacencyList(stations, segments) {
+  const graph = new Map();
+
+  for (const station of stations) {
+    graph.set(station.id, []);
+  }
+
+  for (const segment of segments) {
+    graph.get(segment.station1Id).push(segment.station2Id);
+    graph.get(segment.station2Id).push(segment.station1Id);
+  }
+
+  return graph;
+}
+
+function computeDistance(graph, startId, destinationId) {
+  const queue = [{ stationId: startId, distance: 0 }];
+  const visited = new Set([startId]);
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+
+    if (current.stationId === destinationId) {
+      return current.distance;
+    }
+
+    const neighbors = graph.get(current.stationId) || [];
+
+    for (const neighborId of neighbors) {
+      if (!visited.has(neighborId)) {
+        visited.add(neighborId);
+        queue.push({
+          stationId: neighborId,
+          distance: current.distance + 1
+        });
+      }
+    }
+  }
+
+  return Infinity;
+}
+
+async function selectRandomStartAndDestination() {
+  const stations = await getAllStations();
+  const segments = await getAllSegmentsRaw();
+  const graph = buildAdjacencyList(stations, segments);
+
+  const validPairs = [];
+
+  for (const start of stations) {
+    for (const destination of stations) {
+      if (start.id === destination.id) {
+        continue;
+      }
+
+      const distance = computeDistance(graph, start.id, destination.id);
+
+      if (distance >= 3 && distance < Infinity) {
+        validPairs.push({
+          startStationId: start.id,
+          startStationName: start.name,
+          destinationStationId: destination.id,
+          destinationStationName: destination.name,
+          distance
+        });
+      }
+    }
+  }
+
+  if (validPairs.length === 0) {
+    throw new Error('No valid start/destination pairs found');
+  }
+
+  const randomIndex = Math.floor(Math.random() * validPairs.length);
+  return validPairs[randomIndex];
+}
+
+async function createGame(userId) {
+  const pair = await selectRandomStartAndDestination();
+  const createdAt = new Date().toISOString();
+
+  const result = await dbRun(`
+    INSERT INTO games (
+      user_id,
+      start_station_id,
+      destination_station_id,
+      initial_coins,
+      final_score,
+      status,
+      created_at,
+      completed_at
+    )
+    VALUES (?, ?, ?, 20, NULL, 'planning', ?, NULL)
+  `, [
+    userId,
+    pair.startStationId,
+    pair.destinationStationId,
+    createdAt
+  ]);
+
+  return {
+    id: result.lastID,
+    startStationId: pair.startStationId,
+    startStationName: pair.startStationName,
+    destinationStationId: pair.destinationStationId,
+    destinationStationName: pair.destinationStationName,
+    minimumDistance: pair.distance,
+    initialCoins: 20,
+    status: 'planning',
+    createdAt
+  };
+}
+
+async function getGameById(gameId, userId) {
+  return await dbGet(`
+    SELECT 
+      g.id,
+      g.user_id AS userId,
+      g.start_station_id AS startStationId,
+      ss.name AS startStationName,
+      g.destination_station_id AS destinationStationId,
+      ds.name AS destinationStationName,
+      g.initial_coins AS initialCoins,
+      g.final_score AS finalScore,
+      g.status,
+      g.created_at AS createdAt,
+      g.completed_at AS completedAt
+    FROM games g
+    JOIN stations ss ON g.start_station_id = ss.id
+    JOIN stations ds ON g.destination_station_id = ds.id
+    WHERE g.id = ? AND g.user_id = ?
+  `, [gameId, userId]);
+}
 module.exports = {
   getFullNetwork,
   getPlanningNetwork,
@@ -145,5 +294,8 @@ module.exports = {
   getUserById,
   dbAll,
   dbGet,
-  dbRun
+  dbRun,
+  createGame,
+  getGameById,
+  selectRandomStartAndDestination,
 };
