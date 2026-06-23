@@ -157,6 +157,37 @@ app.get('/api/games/:gameId', isLoggedIn, async (req, res) => {
     res.status(500).json({ error: 'Could not retrieve game' });
   }
 });
+/**
+ * Submit selected route for a game.
+ * Body:
+ * {
+ *   "selectedSegmentIds": [10, 6]
+ * }
+ */
+app.post('/api/games/:gameId/route', isLoggedIn, async (req, res) => {
+  try {
+    const gameId = Number(req.params.gameId);
+    const { selectedSegmentIds } = req.body;
+
+    if (!Number.isInteger(gameId) || gameId <= 0) {
+      return res.status(400).json({ error: 'Invalid game id' });
+    }
+
+    if (!Array.isArray(selectedSegmentIds)) {
+      return res.status(400).json({ error: 'selectedSegmentIds must be an array' });
+    }
+
+    if (!selectedSegmentIds.every((id) => Number.isInteger(id) && id > 0)) {
+      return res.status(400).json({ error: 'All segment ids must be positive integers' });
+    }
+
+    const result = await dao.submitRoute(gameId, req.user.id, selectedSegmentIds);
+    res.status(result.statusCode).json(result.body);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not submit route' });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
